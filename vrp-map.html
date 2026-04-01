@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VRP Map — แผนผังวิทยาลัย</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600&family=IBM+Plex+Sans+Thai:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  :root {
+    --navy: #1a2744;
+    --navy-mid: #243356;
+    --navy-light: #2e4070;
+    --gold: #c9a84c;
+    --gold-light: #e8c97a;
+    --cream: #f5f2eb;
+    --cream-mid: #ede9df;
+    --white: #ffffff;
+    --text-primary: #1a2744;
+    --text-secondary: #5a6a8a;
+    --text-muted: #8a9ab8;
+    --border: rgba(26,39,68,0.1);
+    --border-mid: rgba(26,39,68,0.2);
+    --shadow: 0 4px 24px rgba(26,39,68,0.10);
+    --shadow-strong: 0 8px 40px rgba(26,39,68,0.18);
+    --radius: 12px;
+    --radius-sm: 8px;
+    --sidebar-w: 360px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'IBM Plex Sans Thai', 'Sarabun', sans-serif;
+    background: var(--cream);
+    color: var(--text-primary);
+    height: 100vh;
+    display: flex;
+    overflow: hidden;
+  }
+
+  /* ─── SIDEBAR ─── */
+  #sidebar {
+    width: var(--sidebar-w);
+    min-width: var(--sidebar-w);
+    background: var(--white);
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border);
+    z-index: 1000;
+    position: relative;
+  }
+
+  .sidebar-header {
+    background: var(--navy);
+    padding: 20px 20px 16px;
+    position: relative;
+    overflow: hidden;
+  }
+  .sidebar-header::after {
+    content: '';
+    position: absolute;
+    bottom: -1px; left: 0; right: 0; height: 3px;
+    background: linear-gradient(90deg, var(--gold), var(--gold-light), var(--gold));
+  }
+
+  .school-logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  .logo-circle {
+    width: 42px; height: 42px;
+    border-radius: 50%;
+    background: var(--gold);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 600; font-size: 16px; color: var(--navy);
+    flex-shrink: 0;
+  }
+  .school-name { color: var(--white); }
+  .school-name h1 { font-size: 16px; font-weight: 600; line-height: 1.3; }
+  .school-name p { font-size: 11px; color: rgba(255,255,255,0.55); margin-top: 1px; font-weight: 300; }
+
+  .search-wrap { position: relative; }
+  .search-wrap svg {
+    position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+    width: 16px; height: 16px; opacity: 0.4; pointer-events: none;
+  }
+  #searchInput {
+    width: 100%;
+    padding: 10px 12px 10px 38px;
+    border: 1.5px solid rgba(255,255,255,0.15);
+    border-radius: var(--radius-sm);
+    background: rgba(255,255,255,0.1);
+    color: var(--white);
+    font-size: 13px;
+    font-family: inherit;
+    transition: border-color 0.2s, background 0.2s;
+  }
+  #searchInput::placeholder { color: rgba(255,255,255,0.4); }
+  #searchInput:focus { outline: none; border-color: var(--gold); background: rgba(255,255,255,0.15); }
+
+  /* ─── FILTERS ─── */
+  .filter-section { padding: 14px 16px 10px; border-bottom: 1px solid var(--border); }
+  .filter-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; font-weight: 500; }
+
+  .floor-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+  .floor-chip {
+    padding: 4px 12px;
+    border: 1px solid var(--border-mid);
+    border-radius: 100px;
+    font-size: 12px; font-weight: 500;
+    cursor: pointer; transition: all 0.18s;
+    background: transparent; color: var(--text-secondary);
+    font-family: inherit;
+  }
+  .floor-chip:hover { border-color: var(--navy); color: var(--navy); }
+  .floor-chip.active { background: var(--navy); color: var(--white); border-color: var(--navy); }
+
+  .cat-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .cat-chip {
+    padding: 4px 12px;
+    border-radius: 100px;
+    font-size: 12px; font-weight: 500;
+    cursor: pointer; transition: all 0.18s;
+    background: var(--cream-mid); color: var(--text-secondary);
+    border: 1px solid transparent;
+    font-family: inherit;
+  }
+  .cat-chip:hover { opacity: 0.8; }
+  .cat-chip.active { border-color: currentColor; }
+  .cat-chip[data-cat="อาคารเรียน"].active { background: #dbeafe; color: #1d4ed8; }
+  .cat-chip[data-cat="กิจกรรม"].active { background: #dcfce7; color: #15803d; }
+  .cat-chip[data-cat="บริการ"].active { background: #fef9c3; color: #a16207; }
+  .cat-chip[data-cat="ทั้งหมด"].active { background: var(--navy); color: var(--white); }
+
+  /* ─── RESULTS LIST ─── */
+  #results-list {
+    flex: 1; overflow-y: auto;
+    padding: 8px 0;
+  }
+  #results-list::-webkit-scrollbar { width: 4px; }
+  #results-list::-webkit-scrollbar-track { background: transparent; }
+  #results-list::-webkit-scrollbar-thumb { background: var(--border-mid); border-radius: 4px; }
+
+  .result-count {
+    font-size: 11px; color: var(--text-muted);
+    padding: 8px 16px 4px;
+    font-weight: 500;
+  }
+
+  .result-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 16px;
+    cursor: pointer;
+    transition: background 0.15s;
+    border-bottom: 1px solid var(--border);
+  }
+  .result-item:hover { background: var(--cream); }
+  .result-item.active { background: #eef2ff; }
+
+  .result-num {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 600;
+    flex-shrink: 0;
+    background: var(--navy); color: var(--white);
+  }
+  .result-num.cat-เรียน { background: #1d4ed8; }
+  .result-num.cat-กิจกรรม { background: #15803d; }
+  .result-num.cat-บริการ { background: #a16207; }
+
+  .result-info { flex: 1; min-width: 0; }
+  .result-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .result-meta { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  .result-arrow { color: var(--text-muted); font-size: 14px; transition: transform 0.15s; }
+  .result-item:hover .result-arrow { transform: translateX(3px); color: var(--navy); }
+
+  /* ─── DETAIL PANEL ─── */
+  #detail-panel {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    background: var(--white);
+    border-top: 2px solid var(--gold);
+    padding: 0;
+    transform: translateY(100%);
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    z-index: 10;
+    max-height: 55%;
+    overflow-y: auto;
+  }
+  #detail-panel.open { transform: translateY(0); }
+
+  .detail-header {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 16px 16px 12px;
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; background: var(--white);
+  }
+  .detail-icon {
+    width: 44px; height: 44px; border-radius: 10px;
+    background: var(--navy); color: var(--white);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; font-weight: 700; flex-shrink: 0;
+  }
+  .detail-title { flex: 1; }
+  .detail-title h2 { font-size: 15px; font-weight: 600; line-height: 1.3; }
+  .detail-title .badge {
+    display: inline-block; margin-top: 4px;
+    font-size: 10px; font-weight: 500; padding: 2px 8px;
+    border-radius: 100px; background: var(--cream-mid); color: var(--text-secondary);
+  }
+  .close-btn {
+    background: none; border: none; cursor: pointer;
+    font-size: 18px; color: var(--text-muted); padding: 4px;
+    line-height: 1; transition: color 0.15s;
+    font-family: inherit;
+  }
+  .close-btn:hover { color: var(--text-primary); }
+
+  .detail-body { padding: 14px 16px; }
+  .detail-row {
+    display: flex; gap: 10px;
+    padding: 6px 0; border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+  .detail-row:last-child { border-bottom: none; }
+  .detail-row-label { color: var(--text-muted); font-weight: 500; min-width: 60px; }
+  .detail-row-val { color: var(--text-primary); }
+
+  /* ─── MAP ─── */
+  #map-wrap { flex: 1; position: relative; background: #c8dea0; }
+  #map { width: 100%; height: 100%; }
+
+  /* Leaflet popup override */
+  .leaflet-popup-content-wrapper {
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-strong);
+    border: 1px solid var(--border);
+  }
+  .leaflet-popup-content { margin: 10px 14px; font-family: inherit; font-size: 13px; }
+  .leaflet-popup-content b { display: block; font-size: 14px; color: var(--navy); margin-bottom: 3px; }
+
+  /* Custom markers */
+  .pin {
+    width: 32px; height: 32px;
+    border-radius: 50% 50% 50% 0;
+    transform: rotate(-45deg);
+    display: flex; align-items: center; justify-content: center;
+    border: 2px solid rgba(255,255,255,0.9);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .pin-inner {
+    transform: rotate(45deg);
+    font-size: 11px; font-weight: 700; color: white;
+  }
+  .pin.cat-เรียน { background: #1d4ed8; }
+  .pin.cat-กิจกรรม { background: #15803d; }
+  .pin.cat-บริการ { background: #a16207; }
+  .pin.cat-default { background: var(--navy); }
+  .pin.active-pin {
+    transform: rotate(-45deg) scale(1.3);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+  }
+
+  /* map overlay UI */
+  .map-controls {
+    position: absolute; top: 14px; right: 14px; z-index: 900;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .map-btn {
+    width: 36px; height: 36px;
+    background: var(--white); border: 1px solid var(--border-mid);
+    border-radius: var(--radius-sm); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; box-shadow: var(--shadow);
+    transition: background 0.15s;
+    font-family: inherit;
+  }
+  .map-btn:hover { background: var(--cream); }
+
+  .legend {
+    position: absolute; bottom: 14px; right: 14px; z-index: 900;
+    background: var(--white); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 10px 14px;
+    box-shadow: var(--shadow); font-size: 11px; line-height: 1.8;
+  }
+  .legend-item { display: flex; align-items: center; gap: 7px; color: var(--text-secondary); }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+  /* zoom toast */
+  #toast {
+    position: absolute; bottom: 70px; left: 50%; transform: translateX(-50%);
+    background: var(--navy); color: var(--white);
+    padding: 8px 18px; border-radius: 100px;
+    font-size: 12px; z-index: 999;
+    opacity: 0; transition: opacity 0.3s;
+    pointer-events: none; white-space: nowrap;
+  }
+  #toast.show { opacity: 1; }
+
+  /* Empty state */
+  .empty-state {
+    padding: 40px 20px; text-align: center;
+    color: var(--text-muted); font-size: 13px; display: none;
+  }
+  .empty-state svg { width: 40px; height: 40px; opacity: 0.3; margin-bottom: 10px; display: block; margin: 0 auto 10px; }
+
+  @media (max-width: 700px) {
+    #sidebar { width: 100%; position: fixed; top: 0; left: 0; right: 0; height: 60%; z-index: 2000; }
+    #map-wrap { position: fixed; top: 60%; left: 0; right: 0; bottom: 0; }
+    :root { --sidebar-w: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <div class="sidebar-header">
+    <div class="school-logo">
+      <div class="logo-circle">VRP</div>
+      <div class="school-name">
+        <h1>วิทยาลัยเทคโนโลยีวีรพัฒน์</h1>
+        <p>Rayong Technical College · แผนผังวิทยาลัย</p>
+      </div>
+    </div>
+    <div class="search-wrap">
+      <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+      </svg>
+      <input type="text" id="searchInput" placeholder="ค้นหาห้องเรียน, แผนก, อาคาร..." autocomplete="off">
+    </div>
+  </div>
+
+  <div class="filter-section">
+    <div class="filter-label">ชั้น</div>
+    <div class="floor-chips" id="floorChips">
+      <button class="floor-chip active" data-floor="all">ทุกชั้น</button>
+      <button class="floor-chip" data-floor="1">ชั้น 1</button>
+      <button class="floor-chip" data-floor="2">ชั้น 2</button>
+      <button class="floor-chip" data-floor="3">ชั้น 3</button>
+      <button class="floor-chip" data-floor="4">ชั้น 4</button>
+    </div>
+    <div class="filter-label" style="margin-top:8px">หมวดหมู่</div>
+    <div class="cat-chips" id="catChips">
+      <button class="cat-chip active" data-cat="ทั้งหมด">ทั้งหมด</button>
+      <button class="cat-chip" data-cat="อาคารเรียน">อาคารเรียน</button>
+      <button class="cat-chip" data-cat="กิจกรรม">กิจกรรม</button>
+      <button class="cat-chip" data-cat="บริการ">บริการ</button>
+    </div>
+  </div>
+
+  <div id="results-list">
+    <div class="result-count" id="resultCount"></div>
+    <div id="listItems"></div>
+    <div class="empty-state" id="emptyState">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 15.803 7.5 7.5 0 0015.803 15.803z"/>
+      </svg>
+      ไม่พบสถานที่ที่ตรงกับการค้นหา
+    </div>
+  </div>
+
+  <div id="detail-panel">
+    <div class="detail-header">
+      <div class="detail-icon" id="d-icon">1</div>
+      <div class="detail-title">
+        <h2 id="d-name">ชื่อสถานที่</h2>
+        <span class="badge" id="d-badge">หมวดหมู่</span>
+      </div>
+      <button class="close-btn" onclick="closeDetail()">✕</button>
+    </div>
+    <div class="detail-body">
+      <div class="detail-row"><span class="detail-row-label">ชั้น</span><span class="detail-row-val" id="d-floor">-</span></div>
+      <div class="detail-row"><span class="detail-row-label">แผนก</span><span class="detail-row-val" id="d-dept">-</span></div>
+      <div class="detail-row"><span class="detail-row-label">รายละเอียด</span><span class="detail-row-val" id="d-desc">-</span></div>
+    </div>
+  </div>
+</div>
+
+<div id="map-wrap">
+  <div id="map"></div>
+  <div class="map-controls">
+    <button class="map-btn" title="Zoom In" onclick="map.zoomIn()">+</button>
+    <button class="map-btn" title="Zoom Out" onclick="map.zoomOut()">−</button>
+    <button class="map-btn" title="รีเซ็ต" onclick="resetView()" style="font-size:13px">⟳</button>
+  </div>
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#1d4ed8"></div>อาคารเรียน</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#15803d"></div>กิจกรรม</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#a16207"></div>บริการ</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#1a2744"></div>ทั่วไป</div>
+  </div>
+  <div id="toast">กำลังเดินทางไปยังตำแหน่ง...</div>
+</div>
+
+<script>
+/* ─── MAP SETUP ─── */
+const map = L.map('map', {
+  crs: L.CRS.Simple,
+  minZoom: -2,
+  maxZoom: 3,
+  zoomSnap: 0.25
+});
+
+const IMAGE_W = 1920, IMAGE_H = 1080;
+const bounds = [[0, 0], [IMAGE_H, IMAGE_W]];
+
+/* แทนที่ '5.jpg' ด้วยไฟล์รูปภาพจริงของคุณ */
+const mapLayer = L.imageOverlay('5.jpg', bounds, {
+  errorOverlayUrl: '' 
+}).addTo(map);
+
+map.fitBounds(bounds);
+
+/* ─── DATA ─── */
+/* 
+  วิธีเชื่อม Google Sheets:
+  1. เปิด Sheet → แชร์ → "ทุกคนที่มีลิงก์"
+  2. ใส่ SHEET_ID ด้านล่าง
+  3. Uncomment โค้ด fetchFromSheet() และลบ mock data
+  
+  คอลัมน์ใน Sheet ต้องเรียงดังนี้:
+  A=id, B=name, C=category, D=floor, E=dept, F=desc, G=x, H=y
+*/
+const SHEET_ID = 'YOUR_SHEET_ID_HERE';
+
+let allLocations = [
+  { id:1,  name:"ป้อมยามทางเข้า",     category:"บริการ",    floor:1, dept:"งานรักษาความปลอดภัย", desc:"ตรวจบัตร แลกบัตรผ่าน", x:1780, y:200 },
+  { id:2,  name:"อาคารอำนวยการ",      category:"บริการ",    floor:3, dept:"สำนักงาน",             desc:"ห้องผู้อำนวยการ ฝ่ายบริหาร ห้องประชุมใหญ่", x:960, y:800 },
+  { id:3,  name:"อาคารเรียนรวม 1",    category:"อาคารเรียน",floor:4, dept:"แผนกช่างยนต์",        desc:"ห้องเรียนทฤษฎี ห้องพักครู ชั้น 1-4", x:650, y:750 },
+  { id:4,  name:"อาคารเรียนรวม 2",    category:"อาคารเรียน",floor:4, dept:"แผนกช่างกล",          desc:"ห้องเรียน ห้องปฏิบัติการ ชั้น 2-4", x:400, y:600 },
+  { id:5,  name:"โรงฝึกงานช่างยนต์", category:"อาคารเรียน",floor:1, dept:"แผนกช่างยนต์",        desc:"ซ่อมบำรุง เครื่องยนต์ อุปกรณ์", x:750, y:400 },
+  { id:6,  name:"โรงฝึกงานช่างไฟฟ้า",category:"อาคารเรียน",floor:1, dept:"แผนกช่างไฟฟ้า",      desc:"ฝึกติดตั้งระบบไฟฟ้า", x:550, y:350 },
+  { id:7,  name:"สนามฟุตบอล",         category:"กิจกรรม",   floor:1, dept:"งานกิจกรรม",          desc:"สนามหญ้าสำหรับกีฬาและกิจกรรมกลางแจ้ง", x:1600, y:500 },
+  { id:8,  name:"หอประชุมใหญ่",       category:"กิจกรรม",   floor:2, dept:"งานกิจกรรม",          desc:"จุจุ 1,200 คน ใช้จัดพิธีและกิจกรรม", x:1200, y:720 },
+  { id:9,  name:"โรงอาหาร",           category:"บริการ",    floor:1, dept:"งานบริการ",            desc:"ร้านอาหาร ร้านเครื่องดื่ม เปิด 07.00-17.00", x:850, y:900 },
+  { id:10, name:"ห้องสมุด",           category:"บริการ",    floor:2, dept:"งานวิทยบริการ",        desc:"ยืม-คืนหนังสือ Internet เปิด 08.00-16.30", x:1050, y:600 },
+  { id:11, name:"ห้องพยาบาล",         category:"บริการ",    floor:1, dept:"งานสวัสดิการ",         desc:"ปฐมพยาบาล บริการสุขภาพ", x:1300, y:850 },
+  { id:12, name:"ลานอเนกประสงค์",    category:"กิจกรรม",   floor:1, dept:"งานกิจกรรม",          desc:"จัดกิจกรรม ตลาดนัด นิทรรศการ", x:1400, y:700 },
+  { id:13, name:"แผนกคอมพิวเตอร์",   category:"อาคารเรียน",floor:3, dept:"แผนกคอมพิวเตอร์",     desc:"ห้อง Lab คอมพิวเตอร์ 200+ เครื่อง", x:300, y:780 },
+  { id:14, name:"แผนกอิเล็กทรอนิกส์",category:"อาคารเรียน",floor:2, dept:"แผนกอิเล็กทรอนิกส์", desc:"วงจรไฟฟ้า อิเล็กทรอนิกส์ โทรคมนาคม", x:450, y:450 },
+  { id:15, name:"ที่จอดรถนักศึกษา",  category:"บริการ",    floor:1, dept:"-",                   desc:"จอดรถจักรยานยนต์ และรถยนต์นักศึกษา", x:1700, y:900 },
+];
+
+let filtered = [...allLocations];
+let markers = {};
+let activeMarkerId = null;
+let activeFloor = 'all';
+let activeCat = 'ทั้งหมด';
+
+/* ─── FETCH FROM GOOGLE SHEETS (ใช้งานจริง) ─── */
+async function fetchFromSheet() {
+  if (!SHEET_ID || SHEET_ID === '1bvS98j_aLvd9-cT6x3oBozYEFTVA92XQoEdl0_BzF7U') {
+    renderAll();
+    return;
+  }
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=Sheet1`;
+    const res = await fetch(url);
+    const text = await res.text();
+    const json = JSON.parse(text.substring(47).slice(0,-2));
+    allLocations = json.table.rows
+      .filter(r => r.c[0]?.v)
+      .map(r => ({
+        id:       r.c[0]?.v || 0,
+        name:     r.c[1]?.v || '',
+        category: r.c[2]?.v || 'ทั่วไป',
+        floor:    r.c[3]?.v || 1,
+        dept:     r.c[4]?.v || '-',
+        desc:     r.c[5]?.v || '-',
+        x:        r.c[6]?.v || 960,
+        y:        r.c[7]?.v || 540,
+      }));
+    filtered = [...allLocations];
+    renderAll();
+  } catch(e) {
+    console.warn('Sheet fetch failed, using mock data:', e);
+    renderAll();
+  }
+}
+
+/* ─── MARKER ─── */
+function catClass(cat) {
+  if (cat === 'อาคารเรียน') return 'cat-เรียน';
+  if (cat === 'กิจกรรม') return 'cat-กิจกรรม';
+  if (cat === 'บริการ') return 'cat-บริการ';
+  return 'cat-default';
+}
+
+function makeIcon(loc, active=false) {
+  const cc = catClass(loc.category);
+  return L.divIcon({
+    className: '',
+    html: `<div class="pin ${cc}${active?' active-pin':''}"><span class="pin-inner">${loc.id}</span></div>`,
+    iconSize: [32, 32],
+    iconAnchor: [16, 32],
+    popupAnchor: [0, -34]
+  });
+}
+
+function renderMarkers() {
+  Object.values(markers).forEach(m => map.removeLayer(m));
+  markers = {};
+  filtered.forEach(loc => {
+    const m = L.marker([loc.y, loc.x], { icon: makeIcon(loc) })
+      .addTo(map)
+      .bindPopup(`<b>${loc.name}</b>${loc.category} · ชั้น ${loc.floor}`, { maxWidth: 200 });
+    m.on('click', () => selectLocation(loc.id));
+    markers[loc.id] = m;
+  });
+}
+
+/* ─── LIST ─── */
+function renderList() {
+  const container = document.getElementById('listItems');
+  const empty = document.getElementById('emptyState');
+  const count = document.getElementById('resultCount');
+  container.innerHTML = '';
+  if (filtered.length === 0) {
+    empty.style.display = 'block';
+    count.textContent = '';
+    return;
+  }
+  empty.style.display = 'none';
+  count.textContent = `พบ ${filtered.length} สถานที่`;
+  filtered.forEach(loc => {
+    const div = document.createElement('div');
+    div.className = 'result-item' + (loc.id === activeMarkerId ? ' active' : '');
+    div.dataset.id = loc.id;
+    const cc = catClass(loc.category);
+    div.innerHTML = `
+      <div class="result-num ${cc}">${loc.id}</div>
+      <div class="result-info">
+        <div class="result-name">${loc.name}</div>
+        <div class="result-meta">${loc.category} · ชั้น ${loc.floor}${loc.dept && loc.dept !== '-' ? ' · '+loc.dept : ''}</div>
+      </div>
+      <span class="result-arrow">›</span>
+    `;
+    div.addEventListener('click', () => selectLocation(loc.id));
+    container.appendChild(div);
+  });
+}
+
+function renderAll() {
+  applyFilters();
+  renderMarkers();
+  renderList();
+}
+
+/* ─── SELECT ─── */
+function selectLocation(id) {
+  const loc = allLocations.find(l => l.id === id);
+  if (!loc) return;
+
+  if (activeMarkerId && markers[activeMarkerId]) {
+    const prev = allLocations.find(l => l.id === activeMarkerId);
+    if (prev) markers[activeMarkerId].setIcon(makeIcon(prev, false));
+  }
+  activeMarkerId = id;
+  if (markers[id]) markers[id].setIcon(makeIcon(loc, true));
+
+  map.flyTo([loc.y, loc.x], 1.5, { duration: 1.2 });
+  showToast('กำลังเดินทางไปยัง ' + loc.name);
+
+  document.getElementById('d-icon').textContent = loc.id;
+  document.getElementById('d-name').textContent = loc.name;
+  document.getElementById('d-badge').textContent = loc.category;
+  document.getElementById('d-floor').textContent = 'ชั้น ' + loc.floor;
+  document.getElementById('d-dept').textContent = loc.dept || '-';
+  document.getElementById('d-desc').textContent = loc.desc || '-';
+  document.getElementById('detail-panel').classList.add('open');
+
+  document.querySelectorAll('.result-item').forEach(el => {
+    el.classList.toggle('active', parseInt(el.dataset.id) === id);
+  });
+}
+
+function closeDetail() {
+  document.getElementById('detail-panel').classList.remove('open');
+  if (activeMarkerId && markers[activeMarkerId]) {
+    const prev = allLocations.find(l => l.id === activeMarkerId);
+    if (prev) markers[activeMarkerId].setIcon(makeIcon(prev, false));
+  }
+  activeMarkerId = null;
+  document.querySelectorAll('.result-item').forEach(el => el.classList.remove('active'));
+}
+
+/* ─── FILTERS ─── */
+function applyFilters() {
+  const kw = document.getElementById('searchInput').value.toLowerCase();
+  filtered = allLocations.filter(loc => {
+    const matchFloor = activeFloor === 'all' || String(loc.floor) === String(activeFloor);
+    const matchCat   = activeCat === 'ทั้งหมด' || loc.category === activeCat;
+    const matchKw    = !kw || loc.name.toLowerCase().includes(kw) || (loc.desc||'').toLowerCase().includes(kw) || (loc.dept||'').toLowerCase().includes(kw);
+    return matchFloor && matchCat && matchKw;
+  });
+}
+
+document.getElementById('searchInput').addEventListener('input', () => { renderAll(); });
+
+document.getElementById('floorChips').addEventListener('click', e => {
+  const btn = e.target.closest('.floor-chip');
+  if (!btn) return;
+  document.querySelectorAll('.floor-chip').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  activeFloor = btn.dataset.floor;
+  renderAll();
+});
+
+document.getElementById('catChips').addEventListener('click', e => {
+  const btn = e.target.closest('.cat-chip');
+  if (!btn) return;
+  document.querySelectorAll('.cat-chip').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  activeCat = btn.dataset.cat;
+  renderAll();
+});
+
+/* ─── UTILS ─── */
+let toastTimer;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+function resetView() {
+  map.flyToBounds(bounds, { duration: 0.8 });
+  closeDetail();
+}
+
+/* ─── INIT ─── */
+fetchFromSheet();
+</script>
+</body>
+</html>
