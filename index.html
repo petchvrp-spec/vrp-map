@@ -408,7 +408,7 @@ const map = L.map('map', {
   zoomSnap: 0.25
 });
 
-const IMAGE_W = 6000, IMAGE_H = 3348;
+const IMAGE_W = 1920, IMAGE_H = 1080;
 const bounds = [[0, 0], [IMAGE_H, IMAGE_W]];
 
 /* แทนที่ '5.png' ด้วยไฟล์รูปภาพจริงของคุณ */
@@ -431,7 +431,7 @@ map.fitBounds(bounds);
 const SHEET_ID = 'YOUR_SHEET_ID_HERE';
 
 let allLocations = [
-  { id:1,  name:"ป้อมยามทางเข้า",     category:"บริการ",    floor:1, dept:"งานรักษาความปลอดภัย", desc:"ตรวจบัตร แลกบัตรผ่าน", x:4668, y:2336 },
+  { id:1,  name:"ป้อมยามทางเข้า",     category:"บริการ",    floor:1, dept:"งานรักษาความปลอดภัย", desc:"ตรวจบัตร แลกบัตรผ่าน", x:1504, y:743 },
   { id:2,  name:"อาคารอำนวยการ",      category:"บริการ",    floor:3, dept:"สำนักงาน",             desc:"ห้องผู้อำนวยการ ฝ่ายบริหาร ห้องประชุมใหญ่", x:960, y:800 },
   { id:3,  name:"อาคารเรียนรวม 1",    category:"อาคารเรียน",floor:4, dept:"แผนกช่างยนต์",        desc:"ห้องเรียนทฤษฎี ห้องพักครู ชั้น 1-4", x:650, y:750 },
   { id:4,  name:"อาคารเรียนรวม 2",    category:"อาคารเรียน",floor:4, dept:"แผนกช่างกล",          desc:"ห้องเรียน ห้องปฏิบัติการ ชั้น 2-4", x:400, y:600 },
