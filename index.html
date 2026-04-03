@@ -422,20 +422,39 @@ async function fetchFromSheet() {
 }
 
 /* ─── MARKERS ─── */
+function catColor(cat) {
+  if (cat === 'อาคารเรียน') return '#1d4ed8';
+  if (cat === 'กิจกรรม')   return '#15803d';
+  if (cat === 'บริการ')    return '#a16207';
+  return '#1a2744';
+}
+
 function catClass(cat) {
-  if (cat === 'อาคารเรียน') return 'cat-เรียน';
-  if (cat === 'กิจกรรม')   return 'cat-กิจกรรม';
-  if (cat === 'บริการ')    return 'cat-บริการ';
+  if (cat === 'อาคารเรียน') return 'cat-learn';
+  if (cat === 'กิจกรรม')   return 'cat-activity';
+  if (cat === 'บริการ')    return 'cat-service';
   return 'cat-default';
 }
 
 function makeIcon(loc, active = false) {
-  const cc = catClass(loc.category);
+  const color = catColor(loc.category);
+  const scale = active ? 'scale(1.35)' : '';
+  const shadow = active
+    ? '0 4px 16px rgba(0,0,0,0.38)'
+    : '0 2px 8px rgba(0,0,0,0.28)';
   return L.divIcon({
     className: '',
-    html: `<div class="pin ${cc}${active ? ' active-pin' : ''}"><span class="pin-inner">${loc.id}</span></div>`,
+    html: `<div style="
+      width:30px;height:30px;
+      background:${color};
+      border-radius:50% 50% 50% 0;
+      transform:rotate(-45deg) ${scale};
+      display:flex;align-items:center;justify-content:center;
+      border:2px solid rgba(255,255,255,0.9);
+      box-shadow:${shadow};
+    "><span style="transform:rotate(45deg);font-size:11px;font-weight:700;color:#fff;">${loc.id}</span></div>`,
     iconSize:    [30, 30],
-    iconAnchor:  [15, 30],    /* จุดยึด = ปลายล่างสุดของหมุด */
+    iconAnchor:  [15, 30],
     popupAnchor: [0, -32]
   });
 }
@@ -466,9 +485,9 @@ function renderList() {
     const div = document.createElement('div');
     div.className  = 'result-item' + (loc.id === activeMarkerId ? ' active' : '');
     div.dataset.id = loc.id;
-    const cc = catClass(loc.category);
+    const cc = catColor(loc.category);
     div.innerHTML = `
-      <div class="result-num ${cc}">${loc.id}</div>
+      <div class="result-num" style="background:${cc}">${loc.id}</div>
       <div class="result-info">
         <div class="result-name">${loc.name}</div>
         <div class="result-meta">${loc.category} · ชั้น ${loc.floor}${loc.dept && loc.dept !== '-' ? ' · ' + loc.dept : ''}</div>
