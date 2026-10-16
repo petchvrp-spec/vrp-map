@@ -2,642 +2,405 @@
 <html lang="th">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>VRP Map — แผนผังวิทยาลัย</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600&family=IBM+Plex+Sans+Thai:wght@300;400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+<script>
+  tailwind.config = {
+    theme: { extend: {
+      fontFamily: { sans: ['"Noto Sans Thai"', 'system-ui', 'sans-serif'] },
+      colors: {
+        navy: { DEFAULT: '#1a2744', 800: '#243459', 50: '#eef1f8' },
+        gold: { DEFAULT: '#c9a84c', light: '#e8c97a' },
+        cream: '#f5f2eb'
+      }
+    } }
+  }
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <style>
-  :root {
-    --navy: #1a2744;
-    --gold: #c9a84c;
-    --gold-light: #e8c97a;
-    --cream: #f5f2eb;
-    --cream-mid: #ede9df;
-    --white: #ffffff;
-    --text-primary: #1a2744;
-    --text-secondary: #5a6a8a;
-    --text-muted: #8a9ab8;
-    --border: rgba(26,39,68,0.1);
-    --border-mid: rgba(26,39,68,0.2);
-    --shadow: 0 4px 24px rgba(26,39,68,0.12);
-    --shadow-up: 0 -4px 24px rgba(26,39,68,0.12);
-    --radius: 16px;
-    --radius-sm: 10px;
-    --sheet-peek: 260px;
-    --sheet-mid: 55vh;
-    --safe-bottom: env(safe-area-inset-bottom, 0px);
+  html, body { height: 100%; overflow: hidden; font-family: 'Noto Sans Thai', system-ui, sans-serif; -webkit-tap-highlight-color: transparent; }
+  :root { --peek: 196px; }
+  #map { background: #e9e5da; }
+  .leaflet-container { font-family: inherit; }
+  .leaflet-popup-content-wrapper { border-radius: 12px; box-shadow: 0 8px 28px rgba(26,39,68,.2); }
+  .leaflet-popup-content { margin: 10px 14px; font-size: 13px; line-height: 1.5; }
+  .leaflet-popup-content b { display: block; color: #1a2744; font-size: 14px; }
+
+  /* Pin */
+  .pin { width: 32px; height: 32px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg);
+         display: flex; align-items: center; justify-content: center; border: 2.5px solid #fff;
+         box-shadow: 0 3px 10px rgba(0,0,0,.3); transition: transform .2s, box-shadow .2s; }
+  .pin span { transform: rotate(45deg); font-size: 11px; font-weight: 700; color: #fff; }
+  .pin.on { transform: rotate(-45deg) scale(1.3); box-shadow: 0 6px 18px rgba(0,0,0,.4); }
+
+  /* Panel: sidebar on desktop, bottom sheet on mobile */
+  #panel { transition: transform .35s cubic-bezier(.32,.72,0,1); }
+  @media (max-width: 1023px) {
+    #panel { position: fixed; left: 0; right: 0; bottom: 0; height: 90dvh; z-index: 600;
+             border-radius: 20px 20px 0 0; box-shadow: 0 -6px 30px rgba(26,39,68,.18);
+             transform: translateY(calc(100% - var(--peek) - env(safe-area-inset-bottom, 0px))); will-change: transform; }
+    #panel[data-s="mid"]  { transform: translateY(calc(100% - 56dvh)); }
+    #panel[data-s="full"] { transform: translateY(0); }
   }
 
-  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  /* Detail card */
+  #detail { transition: transform .35s cubic-bezier(.32,.72,0,1), opacity .25s; transform: translateY(110%); opacity: 0; pointer-events: none; }
+  #detail.open { transform: translateY(0); opacity: 1; pointer-events: auto; }
 
-  html, body {
-    font-family: 'IBM Plex Sans Thai', 'Sarabun', sans-serif;
-    background: var(--cream);
-    color: var(--text-primary);
-    height: 100%; width: 100%;
-    overflow: hidden; position: fixed;
-  }
-
-  #map-wrap { position: fixed; inset: 0; z-index: 0; }
-  #map { width: 100%; height: 100%; }
-
-  #top-header {
-    position: fixed; top: 0; left: 0; right: 0; z-index: 500;
-    background: var(--navy);
-    padding: 14px 16px 12px;
-    padding-top: calc(14px + env(safe-area-inset-top, 0px));
-    box-shadow: 0 2px 12px rgba(26,39,68,0.25);
-  }
-  #top-header::after {
-    content: ''; position: absolute;
-    bottom: 0; left: 0; right: 0; height: 2.5px;
-    background: linear-gradient(90deg, var(--gold), var(--gold-light), var(--gold));
-  }
-
-  .school-logo { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-  .logo-circle {
-    width: 36px; height: 36px; border-radius: 50%;
-    background: var(--gold); display: flex; align-items: center; justify-content: center;
-    font-weight: 600; font-size: 14px; color: var(--navy); flex-shrink: 0;
-  }
-  .school-name { color: var(--white); }
-  .school-name h1 { font-size: 14px; font-weight: 600; line-height: 1.3; }
-  .school-name p { font-size: 10px; color: rgba(255,255,255,0.5); margin-top: 1px; }
-
-  .search-wrap { position: relative; }
-  .search-wrap svg {
-    position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
-    width: 15px; height: 15px; opacity: 0.45; pointer-events: none;
-  }
-  #searchInput {
-    width: 100%; padding: 9px 12px 9px 36px;
-    border: 1.5px solid rgba(255,255,255,0.15); border-radius: 100px;
-    background: rgba(255,255,255,0.1); color: var(--white);
-    font-size: 14px; font-family: inherit; -webkit-appearance: none;
-  }
-  #searchInput::placeholder { color: rgba(255,255,255,0.4); }
-  #searchInput:focus { outline: none; border-color: var(--gold); background: rgba(255,255,255,0.15); }
-
-  .map-controls {
-    position: fixed; right: 14px; z-index: 400;
-    display: flex; flex-direction: column; gap: 6px;
-    transition: bottom 0.35s cubic-bezier(0.32, 0.72, 0, 1);
-  }
-  .map-btn {
-    width: 40px; height: 40px; background: var(--white);
-    border: 1px solid var(--border-mid); border-radius: var(--radius-sm);
-    cursor: pointer; display: flex; align-items: center; justify-content: center;
-    font-size: 18px; box-shadow: var(--shadow); font-family: inherit; color: var(--navy);
-  }
-  .map-btn:active { background: var(--cream-mid); }
-
-  #bottom-sheet {
-    position: fixed; left: 0; right: 0; bottom: 0; z-index: 600;
-    background: var(--white); border-radius: var(--radius) var(--radius) 0 0;
-    box-shadow: var(--shadow-up); display: flex; flex-direction: column;
-    transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
-    max-height: 92vh; will-change: transform;
-  }
-  #bottom-sheet.state-peek { transform: translateY(calc(100% - var(--sheet-peek))); }
-  #bottom-sheet.state-mid  { transform: translateY(calc(100% - var(--sheet-mid))); }
-  #bottom-sheet.state-full { transform: translateY(0); }
-
-  .drag-handle-wrap {
-    padding: 10px 0 4px; display: flex; justify-content: center;
-    cursor: grab; flex-shrink: 0; touch-action: none;
-  }
-  .drag-handle { width: 36px; height: 4px; border-radius: 100px; background: var(--border-mid); }
-
-  .sheet-filters { padding: 0 16px 12px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
-  .filter-label {
-    font-size: 11px; color: var(--text-muted);
-    text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; font-weight: 500;
-  }
-
-  .scroll-chips {
-    display: flex; gap: 6px; overflow-x: auto;
-    -webkit-overflow-scrolling: touch; scrollbar-width: none; padding-bottom: 2px;
-  }
-  .scroll-chips::-webkit-scrollbar { display: none; }
-
-  .floor-chip {
-    padding: 5px 14px; border: 1px solid var(--border-mid); border-radius: 100px;
-    font-size: 13px; font-weight: 500; cursor: pointer; background: transparent;
-    color: var(--text-secondary); font-family: inherit; white-space: nowrap; flex-shrink: 0;
-  }
-  .floor-chip.active { background: var(--navy); color: var(--white); border-color: var(--navy); }
-
-  .cat-chip {
-    padding: 5px 14px; border-radius: 100px; font-size: 13px; font-weight: 500;
-    cursor: pointer; background: var(--cream-mid); color: var(--text-secondary);
-    border: 1px solid transparent; font-family: inherit; white-space: nowrap; flex-shrink: 0;
-  }
-  .cat-chip[data-cat="อาคารเรียน"].active { background: #dbeafe; color: #1d4ed8; border-color: #1d4ed8; }
-  .cat-chip[data-cat="กิจกรรม"].active   { background: #dcfce7; color: #15803d; border-color: #15803d; }
-  .cat-chip[data-cat="บริการ"].active    { background: #fef9c3; color: #a16207; border-color: #a16207; }
-  .cat-chip[data-cat="ทั้งหมด"].active   { background: var(--navy); color: var(--white); }
-
-  .result-count { font-size: 12px; color: var(--text-muted); padding: 10px 16px 4px; font-weight: 500; flex-shrink: 0; }
-
-  #results-list { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
-  #results-list::-webkit-scrollbar { display: none; }
-
-  .result-item {
-    display: flex; align-items: center; gap: 12px;
-    padding: 12px 16px; cursor: pointer; border-bottom: 1px solid var(--border);
-  }
-  .result-item:active { background: var(--cream); }
-  .result-item.active { background: #eef2ff; }
-
-  .result-num {
-    width: 36px; height: 36px; border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 13px; font-weight: 600; flex-shrink: 0;
-    background: var(--navy); color: var(--white);
-  }
-  .result-num.cat-เรียน   { background: #1d4ed8; }
-  .result-num.cat-กิจกรรม { background: #15803d; }
-  .result-num.cat-บริการ  { background: #a16207; }
-
-  .result-info { flex: 1; min-width: 0; }
-  .result-name { font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .result-meta { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
-  .result-arrow { color: var(--text-muted); font-size: 16px; }
-
-  .empty-state { padding: 50px 20px; text-align: center; color: var(--text-muted); font-size: 14px; display: none; }
-  .empty-state svg { width: 40px; height: 40px; opacity: 0.3; margin: 0 auto 10px; display: block; }
-
-  #list-bottom-pad { height: calc(16px + var(--safe-bottom)); flex-shrink: 0; }
-
-  #detail-panel {
-    position: fixed; left: 0; right: 0; bottom: 0; z-index: 700;
-    background: var(--white); border-radius: var(--radius) var(--radius) 0 0;
-    box-shadow: var(--shadow-up); border-top: 3px solid var(--gold);
-    transform: translateY(100%);
-    transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
-    max-height: 70vh; display: flex; flex-direction: column;
-  }
-  #detail-panel.open { transform: translateY(0); }
-
-  .detail-header {
-    display: flex; align-items: flex-start; gap: 12px;
-    padding: 16px 16px 14px; border-bottom: 1px solid var(--border); flex-shrink: 0;
-  }
-  .detail-icon {
-    width: 46px; height: 46px; border-radius: 12px;
-    background: var(--navy); color: var(--white);
-    display: flex; align-items: center; justify-content: center;
-    font-size: 17px; font-weight: 700; flex-shrink: 0;
-  }
-  .detail-title { flex: 1; }
-  .detail-title h2 { font-size: 16px; font-weight: 600; line-height: 1.35; }
-  .detail-title .badge {
-    display: inline-block; margin-top: 5px; font-size: 11px; font-weight: 500;
-    padding: 3px 10px; border-radius: 100px; background: var(--cream-mid); color: var(--text-secondary);
-  }
-  .close-btn {
-    background: var(--cream-mid); border: none; cursor: pointer;
-    font-size: 16px; color: var(--text-secondary); width: 32px; height: 32px;
-    border-radius: 50%; display: flex; align-items: center; justify-content: center;
-    font-family: inherit; flex-shrink: 0;
-  }
-
-  .detail-body { padding: 14px 16px; overflow-y: auto; flex: 1; }
-  .detail-row { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
-  .detail-row:last-child { border-bottom: none; }
-  .detail-row-label { color: var(--text-muted); font-weight: 500; min-width: 72px; }
-  .detail-row-val { color: var(--text-primary); flex: 1; }
-  .detail-safe { height: calc(8px + var(--safe-bottom)); }
-
-  #toast {
-    position: fixed; left: 50%; transform: translateX(-50%);
-    background: var(--navy); color: var(--white);
-    padding: 9px 20px; border-radius: 100px; font-size: 13px; z-index: 800;
-    opacity: 0; transition: opacity 0.3s, bottom 0.35s cubic-bezier(0.32, 0.72, 0, 1);
-    pointer-events: none; white-space: nowrap;
-  }
+  #toast { transition: opacity .3s; opacity: 0; pointer-events: none; }
   #toast.show { opacity: 1; }
 
-  #legend {
-    position: fixed; left: 14px; z-index: 400;
-    background: var(--white); border: 1px solid var(--border);
-    border-radius: var(--radius-sm); padding: 8px 12px;
-    box-shadow: var(--shadow); font-size: 11px; line-height: 1.9;
-    transition: bottom 0.35s cubic-bezier(0.32, 0.72, 0, 1);
-  }
-  .legend-item { display: flex; align-items: center; gap: 7px; color: var(--text-secondary); }
-  .legend-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
-
-  .pin {
-    width: 30px; height: 30px;
-    border-radius: 50% 50% 50% 0;
-    transform: rotate(-45deg);
-    display: flex; align-items: center; justify-content: center;
-    border: 2px solid rgba(255,255,255,0.9);
-    box-shadow: 0 2px 8px rgba(0,0,0,0.28);
-  }
-  .pin-inner { transform: rotate(45deg); font-size: 11px; font-weight: 700; color: #fff; }
-  .pin.cat-เรียน   { background: #1d4ed8; }
-  .pin.cat-กิจกรรม { background: #15803d; }
-  .pin.cat-บริการ  { background: #a16207; }
-  .pin.cat-default { background: var(--navy); }
-  .pin.active-pin  { transform: rotate(-45deg) scale(1.35); box-shadow: 0 4px 16px rgba(0,0,0,0.38); }
-
-  .leaflet-popup-content-wrapper {
-    border-radius: var(--radius-sm); box-shadow: var(--shadow); border: 1px solid var(--border);
-  }
-  .leaflet-popup-content { margin: 10px 14px; font-family: inherit; font-size: 13px; }
-  .leaflet-popup-content b { display: block; font-size: 14px; color: var(--navy); margin-bottom: 3px; }
+  .no-scrollbar { scrollbar-width: none; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .slim::-webkit-scrollbar { width: 6px; }
+  .slim::-webkit-scrollbar-thumb { background: rgba(26,39,68,.18); border-radius: 99px; }
+  :focus-visible { outline: 2px solid #c9a84c; outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
-<body>
+<body class="bg-cream text-navy antialiased">
 
-<div id="map-wrap"><div id="map"></div></div>
+<div class="flex h-dvh w-full">
 
-<div id="top-header">
-  <div class="school-logo">
-    <div class="logo-circle">VRP</div>
-    <div class="school-name">
-      <h1>วิทยาลัยเทคโนโลยีวีรพัฒน์</h1>
-      <p>Veeraphat Technological College · แผนผังวิทยาลัย</p>
+  <!-- ═════ PANEL (sidebar / bottom sheet) ═════ -->
+  <aside id="panel" data-s="peek" class="flex flex-col bg-white lg:relative lg:w-[400px] lg:shrink-0 lg:z-[600] lg:shadow-[4px_0_30px_rgba(26,39,68,.12)]">
+
+    <!-- Desktop brand header -->
+    <header class="relative hidden lg:block bg-navy px-6 pt-6 pb-5">
+      <div class="flex items-center gap-3">
+        <div class="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-gold text-sm font-bold text-navy">VRP</div>
+        <div class="min-w-0">
+          <h1 class="text-[17px] font-semibold leading-snug text-white">วิทยาลัยเทคโนโลยีวีรพัฒน์</h1>
+          <p class="text-xs text-white/55">Veeraphat Technological College</p>
+        </div>
+      </div>
+      <div class="absolute inset-x-0 bottom-0 h-[3px] bg-gradient-to-r from-gold via-gold-light to-gold"></div>
+    </header>
+
+    <!-- Drag handle (mobile) -->
+    <div id="dragHandle" class="flex shrink-0 cursor-grab touch-none justify-center pb-1 pt-3 lg:hidden">
+      <div class="h-1 w-10 rounded-full bg-navy/20"></div>
     </div>
-  </div>
-  <div class="search-wrap">
-    <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
-      <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-    </svg>
-    <input type="text" id="searchInput" placeholder="ค้นหาห้องเรียน, แผนก, อาคาร..." autocomplete="off" enterkeyhint="search">
-  </div>
+
+    <!-- Search + filters -->
+    <div class="shrink-0 space-y-3 border-b border-navy/10 px-4 pb-3 pt-2 lg:px-5 lg:pb-4 lg:pt-5">
+      <label class="relative block">
+        <span class="sr-only">ค้นหา</span>
+        <svg class="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-navy/40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input id="searchInput" type="search" autocomplete="off" enterkeyhint="search"
+               placeholder="ค้นหาห้องเรียน แผนก อาคาร..."
+               class="w-full rounded-xl border border-navy/15 bg-cream py-2.5 pl-10 pr-4 text-[15px] text-navy placeholder:text-navy/40 focus:border-gold focus:bg-white focus:outline-none focus:ring-2 focus:ring-gold/30">
+      </label>
+
+      <div>
+        <p class="mb-1.5 text-xs font-medium text-navy/50">หมวดหมู่</p>
+        <div id="catChips" class="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 lg:mx-0 lg:flex-wrap lg:px-0"></div>
+      </div>
+
+      <div id="floorWrap">
+        <p class="mb-1.5 text-xs font-medium text-navy/50">ชั้น</p>
+        <div id="floorChips" class="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 lg:mx-0 lg:flex-wrap lg:px-0"></div>
+      </div>
+    </div>
+
+    <div id="resultCount" class="shrink-0 px-4 pb-1 pt-3 text-xs font-medium text-navy/50 lg:px-5"></div>
+
+    <!-- Results -->
+    <div class="slim min-h-0 flex-1 overflow-y-auto overscroll-contain">
+      <ul id="listItems" class="divide-y divide-navy/[.07]"></ul>
+      <div id="emptyState" class="hidden px-6 py-14 text-center text-sm text-navy/50">
+        <svg class="mx-auto mb-3 h-10 w-10 opacity-40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 21l-5.2-5.2m0 0A7.5 7.5 0 1 0 5.2 15.8a7.5 7.5 0 0 0 10.6 0Z"/></svg>
+        ไม่พบสถานที่ที่ตรงกัน ลองเปลี่ยนคำค้นหาหรือตัวกรอง
+      </div>
+      <div class="h-6" style="padding-bottom: env(safe-area-inset-bottom, 0px)"></div>
+    </div>
+  </aside>
+
+  <!-- ═════ MAP ═════ -->
+  <main class="relative min-w-0 flex-1">
+    <div id="map" class="h-full w-full"></div>
+
+    <!-- Mobile brand pill -->
+    <div class="absolute left-3 top-3 z-[500] flex items-center gap-2 rounded-full bg-navy py-1.5 pl-1.5 pr-4 shadow-lg lg:hidden" style="margin-top: env(safe-area-inset-top, 0px)">
+      <div class="grid h-8 w-8 place-items-center rounded-full bg-gold text-[11px] font-bold text-navy">VRP</div>
+      <span class="text-[13px] font-medium text-white">วีรพัฒน์ แผนผังวิทยาลัย</span>
+    </div>
+
+    <!-- Map controls -->
+    <div class="absolute right-3 top-3 z-[500] flex flex-col overflow-hidden rounded-xl border border-navy/10 bg-white shadow-lg lg:right-4 lg:top-4" style="margin-top: env(safe-area-inset-top, 0px)">
+      <button onclick="map.zoomIn()" aria-label="ซูมเข้า" class="grid h-11 w-11 place-items-center text-xl text-navy hover:bg-cream active:bg-cream">+</button>
+      <button onclick="map.zoomOut()" aria-label="ซูมออก" class="grid h-11 w-11 place-items-center border-t border-navy/10 text-xl text-navy hover:bg-cream active:bg-cream">−</button>
+      <button onclick="resetView()" aria-label="กลับมุมมองเริ่มต้น" class="grid h-11 w-11 place-items-center border-t border-navy/10 text-navy hover:bg-cream active:bg-cream">
+        <svg class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+      </button>
+    </div>
+  </main>
 </div>
 
-<div class="map-controls" id="mapControls">
-  <button class="map-btn" onclick="map.zoomIn()">+</button>
-  <button class="map-btn" onclick="map.zoomOut()">−</button>
-  <button class="map-btn" onclick="resetView()" style="font-size:13px">⟳</button>
-</div>
-
-<div id="legend">
-  <div class="legend-item"><div class="legend-dot" style="background:#1d4ed8"></div>อาคารเรียน</div>
-  <div class="legend-item"><div class="legend-dot" style="background:#15803d"></div>กิจกรรม</div>
-  <div class="legend-item"><div class="legend-dot" style="background:#a16207"></div>บริการ</div>
-  <div class="legend-item"><div class="legend-dot" style="background:#1a2744"></div>ทั่วไป</div>
-</div>
-
-<div id="bottom-sheet" class="state-peek">
-  <div class="drag-handle-wrap" id="dragHandle"><div class="drag-handle"></div></div>
-  <div class="sheet-filters">
-    <div class="filter-label">ชั้น</div>
-    <div class="scroll-chips" id="floorChips" style="margin-bottom:10px">
-      <button class="floor-chip active" data-floor="all">ทุกชั้น</button>
-      <button class="floor-chip" data-floor="1">ชั้น 1</button>
-      <button class="floor-chip" data-floor="2">ชั้น 2</button>
-      <button class="floor-chip" data-floor="3">ชั้น 3</button>
-      <button class="floor-chip" data-floor="4">ชั้น 4</button>
+<!-- Detail card -->
+<section id="detail" aria-live="polite"
+  class="fixed inset-x-0 bottom-0 z-[700] max-h-[70dvh] overflow-hidden rounded-t-2xl border-t-[3px] border-gold bg-white shadow-[0_-8px_30px_rgba(26,39,68,.18)] lg:inset-x-auto lg:bottom-5 lg:left-[420px] lg:w-[380px] lg:rounded-2xl lg:border-t-0 lg:border-l-[4px] lg:shadow-2xl">
+  <div class="flex items-start gap-3 border-b border-navy/10 p-4">
+    <div id="d-icon" class="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-navy text-lg font-bold text-white">1</div>
+    <div class="min-w-0 flex-1">
+      <h2 id="d-name" class="text-[17px] font-semibold leading-snug">ชื่อสถานที่</h2>
+      <span id="d-badge" class="mt-1.5 inline-block rounded-full bg-cream px-2.5 py-0.5 text-xs font-medium text-navy/70">หมวดหมู่</span>
     </div>
-    <div class="filter-label">หมวดหมู่</div>
-    <div class="scroll-chips" id="catChips">
-      <button class="cat-chip active" data-cat="ทั้งหมด">ทั้งหมด</button>
-      <button class="cat-chip" data-cat="อาคารเรียน">อาคารเรียน</button>
-      <button class="cat-chip" data-cat="กิจกรรม">กิจกรรม</button>
-      <button class="cat-chip" data-cat="บริการ">บริการ</button>
-    </div>
+    <button onclick="closeDetail()" aria-label="ปิด" class="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-cream text-navy/70 hover:bg-navy/10">
+      <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+    </button>
   </div>
-  <div class="result-count" id="resultCount"></div>
-  <div id="results-list">
-    <div id="listItems"></div>
-    <div class="empty-state" id="emptyState">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-        <path d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 15.803 7.5 7.5 0 0015.803 15.803z"/>
-      </svg>
-      ไม่พบสถานที่ที่ตรงกับการค้นหา
-    </div>
-    <div id="list-bottom-pad"></div>
-  </div>
-</div>
+  <dl class="overflow-y-auto px-4 py-2 text-sm" style="padding-bottom: calc(.75rem + env(safe-area-inset-bottom, 0px))">
+    <div class="flex gap-4 py-2.5"><dt class="w-20 shrink-0 font-medium text-navy/50">ชั้น</dt><dd id="d-floor" class="flex-1">-</dd></div>
+    <div class="flex gap-4 border-t border-navy/[.07] py-2.5"><dt class="w-20 shrink-0 font-medium text-navy/50">แผนก</dt><dd id="d-dept" class="flex-1">-</dd></div>
+    <div class="flex gap-4 border-t border-navy/[.07] py-2.5"><dt class="w-20 shrink-0 font-medium text-navy/50">รายละเอียด</dt><dd id="d-desc" class="flex-1 leading-relaxed">-</dd></div>
+  </dl>
+</section>
 
-<div id="detail-panel">
-  <div class="detail-header">
-    <div class="detail-icon" id="d-icon">1</div>
-    <div class="detail-title">
-      <h2 id="d-name">ชื่อสถานที่</h2>
-      <span class="badge" id="d-badge">หมวดหมู่</span>
-    </div>
-    <button class="close-btn" onclick="closeDetail()">✕</button>
-  </div>
-  <div class="detail-body">
-    <div class="detail-row"><span class="detail-row-label">ชั้น</span><span class="detail-row-val" id="d-floor">-</span></div>
-    <div class="detail-row"><span class="detail-row-label">แผนก</span><span class="detail-row-val" id="d-dept">-</span></div>
-    <div class="detail-row"><span class="detail-row-label">รายละเอียด</span><span class="detail-row-val" id="d-desc">-</span></div>
-    <div class="detail-safe"></div>
-  </div>
-</div>
-
-<div id="toast">กำลังเดินทาง...</div>
+<div id="toast" class="fixed left-1/2 top-16 z-[800] -translate-x-1/2 whitespace-nowrap rounded-full bg-navy px-5 py-2 text-[13px] font-medium text-white shadow-lg lg:top-5 lg:left-[calc(50%+200px)]">กำลังเดินทาง...</div>
 
 <script>
-/* ════════════════════════════════════════════════════════
-   พิกัดใน CRS.Simple ของ Leaflet:
-     bounds = [[0,0], [IMAGE_H, IMAGE_W]]
-     → มุมล่างซ้าย = [0, 0]   (lat=0, lng=0)
-     → มุมบนขวา   = [H, W]   (lat=H, lng=W)
-
-   ข้อมูล x, y ในไฟล์นับจากมุมบนซ้าย (screen space):
-     x = ระยะจากซ้าย  → ตรงกับ lng ของ Leaflet  ✓
-     y = ระยะจากบน   → ต้องกลับด้าน: lat = IMAGE_H - dataY
-
-   ฟังก์ชัน toLatLng() ทำการแปลงนี้ทุกครั้งที่วาง marker หรือ flyTo
-════════════════════════════════════════════════════════ */
-
+/* พิกัด: x,y ในข้อมูลนับจากมุมบนซ้ายของรูป → Leaflet CRS.Simple ใช้ [lat=H-y, lng=x] */
 const IMAGE_W = 1920, IMAGE_H = 1080;
-const bounds  = [[0, 0], [IMAGE_H, IMAGE_W]];
+const bounds = [[0, 0], [IMAGE_H, IMAGE_W]];
+const toLatLng = (x, y) => [IMAGE_H - y, x];
 
-const map = L.map('map', {
-  crs: L.CRS.Simple,
-  minZoom: -2,
-  maxZoom: 3,
-  zoomSnap: 0.25,
-  zoomControl: false
-});
-
+const map = L.map('map', { crs: L.CRS.Simple, minZoom: -2, maxZoom: 3, zoomSnap: 0.25, zoomControl: false, attributionControl: false });
 L.imageOverlay('5.png', bounds).addTo(map);
 map.fitBounds(bounds);
-
-/* แปลงพิกัด screen → Leaflet */
-function toLatLng(dataX, dataY) {
-  return [IMAGE_H - dataY, dataX];
-}
 
 /* ─── DATA ─── */
 const SHEET_ID = '1bvS98j_aLvd9-cT6x3oBozYEFTVA92XQoEdl0_BzF7U';
 
 let allLocations = [
-  { id:1,  name:"ป้อมยามทางเข้า",      category:"บริการ",     floor:1, dept:"งานรักษาความปลอดภัย", desc:"ตรวจบัตร แลกบัตรผ่าน",                        x:1503, y:742 },
-  { id:2,  name:"อาคารธุรการ 1",        category:"บริการ",     floor:3, dept:"สำนักงาน",             desc:"ห้องผู้อำนวยการ ห้องการเงิน",                  x:1152, y:813 },
-  { id:3,  name:"อาคารเรียนรวม 2",      category:"อาคารเรียน", floor:4, dept:"อาคารเรียนรวม",        desc:"ห้องเรียนทฤษฎี",                               x:650,  y:750 },
-  { id:4,  name:"บ้านพักผู้บริหาร",     category:"บริการ",     floor:1, dept:"บ้านพักผู้บริหาร",     desc:"พื้นที่ส่วนบุคคล",                             x:400,  y:600 },
-  { id:5,  name:"โรงฝึกงานช่างยนต์",   category:"อาคารเรียน", floor:1, dept:"แผนกช่างยนต์",         desc:"ซ่อมบำรุง เครื่องยนต์ อุปกรณ์",               x:750,  y:400 },
-  { id:6,  name:"ห้องน้ำ",              category:"บริการ",     floor:1, dept:"ห้องน้ำ",               desc:"ห้องน้ำ",                                       x:550,  y:350 },
-  { id:7,  name:"สนามฟุตบอล",           category:"กิจกรรม",    floor:1, dept:"งานกิจกรรม",           desc:"สนามหญ้าสำหรับกีฬาและกิจกรรมกลางแจ้ง",        x:1600, y:500 },
-  { id:8,  name:"หอประชุมใหญ่",         category:"กิจกรรม",    floor:2, dept:"งานกิจกรรม",           desc:"จุ 1,200 คน ใช้จัดพิธีและกิจกรรม",            x:1200, y:720 },
-  { id:9,  name:"โรงอาหาร",             category:"บริการ",     floor:1, dept:"งานบริการ",             desc:"ร้านอาหาร ร้านเครื่องดื่ม เปิด 07.00-17.00",  x:850,  y:900 },
-  { id:10, name:"ห้องสมุด",             category:"บริการ",     floor:2, dept:"งานวิทยบริการ",         desc:"ยืม-คืนหนังสือ Internet เปิด 08.00-16.30",    x:1050, y:600 },
-  { id:11, name:"ห้องพยาบาล",           category:"บริการ",     floor:1, dept:"งานสวัสดิการ",          desc:"ปฐมพยาบาล บริการสุขภาพ",                      x:1300, y:850 },
-  { id:12, name:"ลานอเนกประสงค์",       category:"กิจกรรม",    floor:1, dept:"งานกิจกรรม",           desc:"จัดกิจกรรม ตลาดนัด นิทรรศการ",               x:1400, y:700 },
-  { id:13, name:"แผนกคอมพิวเตอร์",     category:"อาคารเรียน", floor:3, dept:"แผนกคอมพิวเตอร์",       desc:"ห้อง Lab คอมพิวเตอร์ 200+ เครื่อง",          x:300,  y:780 },
-  { id:14, name:"แผนกอิเล็กทรอนิกส์",  category:"อาคารเรียน", floor:2, dept:"แผนกอิเล็กทรอนิกส์",   desc:"วงจรไฟฟ้า อิเล็กทรอนิกส์ โทรคมนาคม",        x:450,  y:450 },
-  { id:15, name:"ที่จอดรถนักศึกษา",    category:"บริการ",     floor:1, dept:"-",                    desc:"จอดรถจักรยานยนต์ และรถยนต์นักศึกษา",          x:1700, y:900 },
+  { id:1,  name:"ป้อมยามทางเข้า",     category:"บริการ",     floor:1, dept:"งานรักษาความปลอดภัย", desc:"ตรวจบัตร แลกบัตรผ่าน", x:1503, y:742 },
+  { id:2,  name:"อาคารธุรการ 1",       category:"บริการ",     floor:3, dept:"สำนักงาน",             desc:"ห้องผู้อำนวยการ ห้องการเงิน", x:1152, y:813 },
+  { id:3,  name:"อาคารเรียนรวม 2",     category:"อาคารเรียน", floor:4, dept:"อาคารเรียนรวม",        desc:"ห้องเรียนทฤษฎี", x:650,  y:750 },
+  { id:4,  name:"บ้านพักผู้บริหาร",    category:"บริการ",     floor:1, dept:"บ้านพักผู้บริหาร",     desc:"พื้นที่ส่วนบุคคล", x:400,  y:600 },
+  { id:5,  name:"โรงฝึกงานช่างยนต์",  category:"อาคารเรียน", floor:1, dept:"แผนกช่างยนต์",         desc:"ซ่อมบำรุง เครื่องยนต์ อุปกรณ์", x:750,  y:400 },
+  { id:6,  name:"ห้องน้ำ",             category:"บริการ",     floor:1, dept:"ห้องน้ำ",               desc:"ห้องน้ำ", x:550,  y:350 },
+  { id:7,  name:"สนามฟุตบอล",          category:"กิจกรรม",    floor:1, dept:"งานกิจกรรม",           desc:"สนามหญ้าสำหรับกีฬาและกิจกรรมกลางแจ้ง", x:1600, y:500 },
+  { id:8,  name:"หอประชุมใหญ่",        category:"กิจกรรม",    floor:2, dept:"งานกิจกรรม",           desc:"จุ 1,200 คน ใช้จัดพิธีและกิจกรรม", x:1200, y:720 },
+  { id:9,  name:"โรงอาหาร",            category:"บริการ",     floor:1, dept:"งานบริการ",             desc:"ร้านอาหาร ร้านเครื่องดื่ม เปิด 07.00-17.00", x:850,  y:900 },
+  { id:10, name:"ห้องสมุด",            category:"บริการ",     floor:2, dept:"งานวิทยบริการ",         desc:"ยืม-คืนหนังสือ Internet เปิด 08.00-16.30", x:1050, y:600 },
+  { id:11, name:"ห้องพยาบาล",          category:"บริการ",     floor:1, dept:"งานสวัสดิการ",          desc:"ปฐมพยาบาล บริการสุขภาพ", x:1300, y:850 },
+  { id:12, name:"ลานอเนกประสงค์",      category:"กิจกรรม",    floor:1, dept:"งานกิจกรรม",           desc:"จัดกิจกรรม ตลาดนัด นิทรรศการ", x:1400, y:700 },
+  { id:13, name:"แผนกคอมพิวเตอร์",    category:"อาคารเรียน", floor:3, dept:"แผนกคอมพิวเตอร์",       desc:"ห้อง Lab คอมพิวเตอร์ 200+ เครื่อง", x:300,  y:780 },
+  { id:14, name:"แผนกอิเล็กทรอนิกส์", category:"อาคารเรียน", floor:2, dept:"แผนกอิเล็กทรอนิกส์",   desc:"วงจรไฟฟ้า อิเล็กทรอนิกส์ โทรคมนาคม", x:450,  y:450 },
+  { id:15, name:"ที่จอดรถนักศึกษา",   category:"บริการ",     floor:1, dept:"-",                    desc:"จอดรถจักรยานยนต์ และรถยนต์นักศึกษา", x:1700, y:900 },
 ];
 
-let filtered = [...allLocations];
-let markers  = {};
-let activeMarkerId = null;
-let activeFloor = 'all';
-let activeCat   = 'ทั้งหมด';
+const CATS = [
+  { key: 'ทั้งหมด',    color: '#1a2744' },
+  { key: 'อาคารเรียน', color: '#1d4ed8' },
+  { key: 'กิจกรรม',    color: '#15803d' },
+  { key: 'บริการ',     color: '#a16207' },
+];
+const catColor = c => (CATS.find(x => x.key === c) || { color: '#1a2744' }).color;
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
-/* ─── SHEET FETCH ─── */
+let filtered = [...allLocations];
+let markers = {};
+let activeId = null;
+let activeFloor = 'all';
+let activeCat = 'ทั้งหมด';
+
+/* ─── Google Sheet ─── */
 async function fetchFromSheet() {
   try {
-    const url  = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=Sheet1`;
-    const res  = await fetch(url);
-    const text = await res.text();
+    const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=Sheet1`;
+    const text = await (await fetch(url)).text();
     const json = JSON.parse(text.substring(47).slice(0, -2));
     const rows = json.table.rows.filter(r => r.c[0]?.v);
-    if (rows.length > 0) {
+    if (rows.length) {
       allLocations = rows.map(r => ({
-        id:       r.c[0]?.v || 0,
-        name:     r.c[1]?.v || '',
-        category: r.c[2]?.v || 'ทั่วไป',
-        floor:    r.c[3]?.v || 1,
-        dept:     r.c[4]?.v || '-',
-        desc:     r.c[5]?.v || '-',
-        x:        r.c[6]?.v || 960,
-        y:        r.c[7]?.v || 540,
+        id: r.c[0]?.v || 0, name: r.c[1]?.v || '', category: r.c[2]?.v || 'ทั่วไป',
+        floor: r.c[3]?.v || 1, dept: r.c[4]?.v || '-', desc: r.c[5]?.v || '-',
+        x: r.c[6]?.v || 960, y: r.c[7]?.v || 540,
       }));
-      filtered = [...allLocations];
     }
-  } catch(e) { console.warn('Sheet fetch failed, using built-in data:', e); }
+  } catch (e) { console.warn('Sheet fetch failed, using built-in data:', e); }
+  buildFloorChips();
   renderAll();
 }
 
-/* ─── MARKERS ─── */
-function catColor(cat) {
-  if (cat === 'อาคารเรียน') return '#1d4ed8';
-  if (cat === 'กิจกรรม')   return '#15803d';
-  if (cat === 'บริการ')    return '#a16207';
-  return '#1a2744';
+/* ─── Chips ─── */
+function chipClass(active, color) {
+  return 'shrink-0 whitespace-nowrap rounded-full border px-3.5 py-1.5 text-[13px] font-medium transition-colors ' +
+    (active ? 'text-white border-transparent' : 'border-navy/15 bg-white text-navy/70 hover:bg-cream');
 }
-
-function catClass(cat) {
-  if (cat === 'อาคารเรียน') return 'cat-learn';
-  if (cat === 'กิจกรรม')   return 'cat-activity';
-  if (cat === 'บริการ')    return 'cat-service';
-  return 'cat-default';
+function buildCatChips() {
+  const el = document.getElementById('catChips');
+  el.innerHTML = CATS.map(c => {
+    const on = c.key === activeCat;
+    return `<button data-cat="${c.key}" class="${chipClass(on)} inline-flex items-center gap-1.5" ${on ? `style="background:${c.color}"` : ''}>
+      ${c.key !== 'ทั้งหมด' ? `<span class="h-2 w-2 rounded-full" style="background:${on ? '#fff' : c.color}"></span>` : ''}${c.key}</button>`;
+  }).join('');
 }
+function buildFloorChips() {
+  const floors = [...new Set(allLocations.map(l => String(l.floor)))].sort((a, b) => a - b);
+  const el = document.getElementById('floorChips');
+  const items = [['all', 'ทุกชั้น'], ...floors.map(f => [f, 'ชั้น ' + f])];
+  el.innerHTML = items.map(([v, label]) => {
+    const on = String(activeFloor) === v;
+    return `<button data-floor="${v}" class="${chipClass(on)}" ${on ? 'style="background:#1a2744"' : ''}>${label}</button>`;
+  }).join('');
+}
+document.getElementById('catChips').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  activeCat = b.dataset.cat; buildCatChips(); renderAll();
+});
+document.getElementById('floorChips').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  activeFloor = b.dataset.floor; buildFloorChips(); renderAll();
+});
 
-function makeIcon(loc, active = false) {
-  const color = catColor(loc.category);
-  const scale = active ? 'scale(1.35)' : '';
-  const shadow = active
-    ? '0 4px 16px rgba(0,0,0,0.38)'
-    : '0 2px 8px rgba(0,0,0,0.28)';
+/* ─── Markers ─── */
+function makeIcon(loc, on = false) {
   return L.divIcon({
     className: '',
-    html: `<div style="
-      width:30px;height:30px;
-      background:${color};
-      border-radius:50% 50% 50% 0;
-      transform:rotate(-45deg) ${scale};
-      display:flex;align-items:center;justify-content:center;
-      border:2px solid rgba(255,255,255,0.9);
-      box-shadow:${shadow};
-    "><span style="transform:rotate(45deg);font-size:11px;font-weight:700;color:#fff;">${loc.id}</span></div>`,
-    iconSize:    [30, 30],
-    iconAnchor:  [15, 30],
-    popupAnchor: [0, -32]
+    html: `<div class="pin${on ? ' on' : ''}" style="background:${catColor(loc.category)}"><span>${esc(loc.id)}</span></div>`,
+    iconSize: [32, 32], iconAnchor: [16, 32], popupAnchor: [0, -34]
   });
 }
-
 function renderMarkers() {
   Object.values(markers).forEach(m => map.removeLayer(m));
   markers = {};
   filtered.forEach(loc => {
-    const ll = toLatLng(loc.x, loc.y);               /* ← แปลงพิกัด */
-    const m  = L.marker(ll, { icon: makeIcon(loc) })
+    const m = L.marker(toLatLng(loc.x, loc.y), { icon: makeIcon(loc, loc.id === activeId) })
       .addTo(map)
-      .bindPopup(`<b>${loc.name}</b>${loc.category} · ชั้น ${loc.floor}`, { maxWidth: 180 });
+      .bindPopup(`<b>${esc(loc.name)}</b>${esc(loc.category)} · ชั้น ${esc(loc.floor)}`, { maxWidth: 200 });
     m.on('click', () => selectLocation(loc.id));
     markers[loc.id] = m;
   });
 }
 
-/* ─── LIST ─── */
+/* ─── List ─── */
 function renderList() {
-  const container = document.getElementById('listItems');
-  const empty     = document.getElementById('emptyState');
-  const count     = document.getElementById('resultCount');
-  container.innerHTML = '';
-  if (filtered.length === 0) { empty.style.display = 'block'; count.textContent = ''; return; }
-  empty.style.display = 'none';
-  count.textContent   = `พบ ${filtered.length} สถานที่`;
+  const ul = document.getElementById('listItems');
+  const empty = document.getElementById('emptyState');
+  const count = document.getElementById('resultCount');
+  ul.innerHTML = '';
+  if (!filtered.length) { empty.classList.remove('hidden'); count.textContent = ''; return; }
+  empty.classList.add('hidden');
+  count.textContent = `พบ ${filtered.length} สถานที่`;
   filtered.forEach(loc => {
-    const div = document.createElement('div');
-    div.className  = 'result-item' + (loc.id === activeMarkerId ? ' active' : '');
-    div.dataset.id = loc.id;
-    const cc = catColor(loc.category);
-    div.innerHTML = `
-      <div class="result-num" style="background:${cc}">${loc.id}</div>
-      <div class="result-info">
-        <div class="result-name">${loc.name}</div>
-        <div class="result-meta">${loc.category} · ชั้น ${loc.floor}${loc.dept && loc.dept !== '-' ? ' · ' + loc.dept : ''}</div>
+    const li = document.createElement('li');
+    const on = loc.id === activeId;
+    li.className = 'flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors lg:px-5 ' + (on ? 'bg-navy-50' : 'hover:bg-cream active:bg-cream');
+    li.dataset.id = loc.id;
+    li.innerHTML = `
+      <div class="grid h-10 w-10 shrink-0 place-items-center rounded-full text-sm font-semibold text-white" style="background:${catColor(loc.category)}">${esc(loc.id)}</div>
+      <div class="min-w-0 flex-1">
+        <div class="truncate text-[15px] font-medium">${esc(loc.name)}</div>
+        <div class="truncate text-xs text-navy/50">${esc(loc.category)} · ชั้น ${esc(loc.floor)}${loc.dept && loc.dept !== '-' ? ' · ' + esc(loc.dept) : ''}</div>
       </div>
-      <span class="result-arrow">›</span>`;
-    div.addEventListener('click', () => selectLocation(loc.id));
-    container.appendChild(div);
+      <svg class="h-4 w-4 shrink-0 text-navy/30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg>`;
+    li.addEventListener('click', () => selectLocation(loc.id));
+    ul.appendChild(li);
   });
 }
 
-function renderAll() { applyFilters(); renderMarkers(); renderList(); }
-
-/* ─── SELECT ─── */
-function selectLocation(id) {
-  const loc = allLocations.find(l => l.id === id);
-  if (!loc) return;
-
-  if (activeMarkerId && markers[activeMarkerId]) {
-    const prev = allLocations.find(l => l.id === activeMarkerId);
-    if (prev) markers[activeMarkerId].setIcon(makeIcon(prev, false));
-  }
-  activeMarkerId = id;
-  if (markers[id]) markers[id].setIcon(makeIcon(loc, true));
-
-  map.flyTo(toLatLng(loc.x, loc.y), 1.5, { duration: 1.0 }); /* ← แปลงพิกัด */
-  showToast('ไปยัง ' + loc.name);
-
-  document.getElementById('d-icon').textContent  = loc.id;
-  document.getElementById('d-name').textContent  = loc.name;
-  document.getElementById('d-badge').textContent = loc.category;
-  document.getElementById('d-floor').textContent = 'ชั้น ' + loc.floor;
-  document.getElementById('d-dept').textContent  = loc.dept || '-';
-  document.getElementById('d-desc').textContent  = loc.desc || '-';
-  document.getElementById('detail-panel').classList.add('open');
-  setSheetState('peek');
-
-  document.querySelectorAll('.result-item').forEach(el =>
-    el.classList.toggle('active', parseInt(el.dataset.id) === id)
+function applyFilters() {
+  const kw = document.getElementById('searchInput').value.trim().toLowerCase();
+  filtered = allLocations.filter(l =>
+    (activeFloor === 'all' || String(l.floor) === String(activeFloor)) &&
+    (activeCat === 'ทั้งหมด' || l.category === activeCat) &&
+    (!kw || [l.name, l.desc, l.dept].some(v => String(v || '').toLowerCase().includes(kw)))
   );
 }
+function renderAll() { applyFilters(); renderMarkers(); renderList(); }
+
+/* ─── Select / detail ─── */
+function selectLocation(id) {
+  const loc = allLocations.find(l => l.id === id); if (!loc) return;
+  if (activeId && markers[activeId]) {
+    const prev = allLocations.find(l => l.id === activeId);
+    if (prev) markers[activeId].setIcon(makeIcon(prev, false)).setZIndexOffset(0);
+  }
+  activeId = id;
+  if (markers[id]) markers[id].setIcon(makeIcon(loc, true)).setZIndexOffset(1000);
+
+  // เลื่อนจุดให้อยู่เหนือ bottom sheet บนมือถือ
+  const isMobile = window.matchMedia('(max-width:1023px)').matches;
+  const target = map.project(toLatLng(loc.x, loc.y), 1.5);
+  if (isMobile) target.y += window.innerHeight * 0.18;
+  map.flyTo(map.unproject(target, 1.5), 1.5, { duration: 0.9 });
+  showToast('ไปยัง ' + loc.name);
+
+  d('d-icon').textContent = loc.id;
+  d('d-icon').style.background = catColor(loc.category);
+  d('d-name').textContent = loc.name;
+  d('d-badge').textContent = loc.category;
+  d('d-floor').textContent = 'ชั้น ' + loc.floor;
+  d('d-dept').textContent = loc.dept || '-';
+  d('d-desc').textContent = loc.desc || '-';
+  d('detail').classList.add('open');
+  setSheet('peek');
+  renderList();
+}
+const d = id => document.getElementById(id);
 
 function closeDetail() {
-  document.getElementById('detail-panel').classList.remove('open');
-  if (activeMarkerId && markers[activeMarkerId]) {
-    const prev = allLocations.find(l => l.id === activeMarkerId);
-    if (prev) markers[activeMarkerId].setIcon(makeIcon(prev, false));
+  d('detail').classList.remove('open');
+  if (activeId && markers[activeId]) {
+    const prev = allLocations.find(l => l.id === activeId);
+    if (prev) markers[activeId].setIcon(makeIcon(prev, false)).setZIndexOffset(0);
   }
-  activeMarkerId = null;
-  document.querySelectorAll('.result-item').forEach(el => el.classList.remove('active'));
-}
-
-/* ─── FILTERS ─── */
-function applyFilters() {
-  const kw = document.getElementById('searchInput').value.toLowerCase();
-  filtered = allLocations.filter(loc => {
-    const matchFloor = activeFloor === 'all' || String(loc.floor) === String(activeFloor);
-    const matchCat   = activeCat === 'ทั้งหมด' || loc.category === activeCat;
-    const matchKw    = !kw
-      || loc.name.toLowerCase().includes(kw)
-      || (loc.desc||'').toLowerCase().includes(kw)
-      || (loc.dept||'').toLowerCase().includes(kw);
-    return matchFloor && matchCat && matchKw;
-  });
-}
-
-document.getElementById('searchInput').addEventListener('input', () => { setSheetState('mid'); renderAll(); });
-document.getElementById('searchInput').addEventListener('focus', () => setSheetState('mid'));
-
-document.getElementById('floorChips').addEventListener('click', e => {
-  const btn = e.target.closest('.floor-chip'); if (!btn) return;
-  document.querySelectorAll('.floor-chip').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active'); activeFloor = btn.dataset.floor; renderAll();
-});
-document.getElementById('catChips').addEventListener('click', e => {
-  const btn = e.target.closest('.cat-chip'); if (!btn) return;
-  document.querySelectorAll('.cat-chip').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active'); activeCat = btn.dataset.cat; renderAll();
-});
-
-/* ─── BOTTOM SHEET DRAG ─── */
-const sheet = document.getElementById('bottom-sheet');
-let sheetState = 'peek';
-
-function setSheetState(s) {
-  sheetState = s;
-  sheet.className = 'state-' + s;
-  updateOverlayPositions();
-}
-
-function updateOverlayPositions() {
-  const sheetH = sheetState === 'peek'
-    ? parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sheet-peek'))
-    : sheetState === 'mid'
-      ? window.innerHeight * 0.55
-      : window.innerHeight * 0.92;
-  const pad = sheetH + 16;
-  document.getElementById('mapControls').style.bottom = pad + 'px';
-  document.getElementById('legend').style.bottom      = pad + 'px';
-  document.getElementById('toast').style.bottom       = (sheetH + 16) + 'px';
-}
-
-let dragStart = null, sheetStartY = null;
-const handle  = document.getElementById('dragHandle');
-
-handle.addEventListener('touchstart', e => {
-  dragStart   = e.touches[0].clientY;
-  sheetStartY = sheet.getBoundingClientRect().top;
-  sheet.style.transition = 'none';
-}, { passive: true });
-
-handle.addEventListener('touchmove', e => {
-  if (dragStart === null) return;
-  const dy     = e.touches[0].clientY - dragStart;
-  const newTop = sheetStartY + dy;
-  const minTop = window.innerHeight * 0.08;
-  const maxTop = window.innerHeight - parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sheet-peek'));
-  sheet.style.transform = `translateY(${Math.max(minTop, Math.min(maxTop, newTop))}px)`;
-}, { passive: true });
-
-handle.addEventListener('touchend', e => {
-  sheet.style.transition = '';
-  if (dragStart === null) return;
-  const dy = e.changedTouches[0].clientY - dragStart;
-  if      (dy < -60) setSheetState(sheetState === 'peek' ? 'mid' : 'full');
-  else if (dy >  60) setSheetState(sheetState === 'full' ? 'mid' : 'peek');
-  else               setSheetState(sheetState);
-  dragStart = null;
-}, { passive: true });
-
-sheet.addEventListener('click', e => {
-  if (sheetState === 'peek'
-    && !e.target.closest('.result-item')
-    && !e.target.closest('button')
-    && !e.target.closest('input')) {
-    setSheetState('mid');
-  }
-});
-
-/* ─── UTILS ─── */
-let toastTimer;
-function showToast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg; t.classList.add('show');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove('show'), 2000);
+  activeId = null;
+  renderList();
 }
 function resetView() { map.flyToBounds(bounds, { duration: 0.8 }); closeDetail(); }
 
-/* ─── INIT ─── */
-updateOverlayPositions();
+/* ─── Search ─── */
+const search = d('searchInput');
+search.addEventListener('input', () => { setSheet('mid'); renderAll(); });
+search.addEventListener('focus', () => setSheet('mid'));
+
+/* ─── Bottom sheet (mobile) ─── */
+const sheet = d('panel');
+let sheetState = 'peek';
+function setSheet(s) { sheetState = s; sheet.dataset.s = s; sheet.style.transform = ''; sheet.style.transition = ''; }
+
+let dragY = null, startTop = 0;
+const handle = d('dragHandle');
+handle.addEventListener('touchstart', e => {
+  dragY = e.touches[0].clientY; startTop = sheet.getBoundingClientRect().top;
+  sheet.style.transition = 'none';
+}, { passive: true });
+handle.addEventListener('touchmove', e => {
+  if (dragY === null) return;
+  const peekPx = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--peek'));
+  const top = Math.max(window.innerHeight * 0.1, Math.min(window.innerHeight - peekPx, startTop + e.touches[0].clientY - dragY));
+  sheet.style.transform = `translateY(${top - (window.innerHeight - sheet.offsetHeight)}px)`;
+}, { passive: true });
+handle.addEventListener('touchend', e => {
+  if (dragY === null) return;
+  const dy = e.changedTouches[0].clientY - dragY; dragY = null;
+  if (dy < -50) setSheet(sheetState === 'peek' ? 'mid' : 'full');
+  else if (dy > 50) setSheet(sheetState === 'full' ? 'mid' : 'peek');
+  else setSheet(sheetState);
+}, { passive: true });
+handle.addEventListener('click', () => setSheet(sheetState === 'peek' ? 'mid' : 'peek'));
+map.on('click', () => { if (sheetState !== 'peek') setSheet('peek'); search.blur(); });
+
+/* ─── Utils ─── */
+let toastTimer;
+function showToast(msg) {
+  const t = d('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 1800);
+}
+window.addEventListener('resize', () => map.invalidateSize());
+
+/* ─── Init ─── */
+buildCatChips();
+buildFloorChips();
+renderAll();
 fetchFromSheet();
 </script>
 </body>
